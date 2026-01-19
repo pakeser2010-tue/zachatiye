@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>КОНЦЕПЦИЯ.FM</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
     <style>
         body {
@@ -60,13 +60,17 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
-        // Safety check for library loading
-        if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
-            throw new Error("Critical: React libraries failed to load from CDN. Please check your connection.");
-        }
+           <script type="text/babel">
+          // Safety check for library loading
+          if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+            document.getElementById('root').innerHTML =
+              '<div style="padding:16px;font-family:system-ui">' +
+              'Не загрузились библиотеки React (CDN). Попробуйте обновить страницу или открыть в другом браузере.' +
+              '</div>';
+          } else {
+        
+            const { useState } = React;
 
-        const { useState } = React;
 
         // Icon components replacing lucide-react imports
         const Calendar = ({ className }) => (
