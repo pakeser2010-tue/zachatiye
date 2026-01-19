@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>КОНЦЕПЦИЯ.FM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.6s ease-out;
+        }
+        
+        /* Scanlines effect */
+        .scanlines {
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.05),
+                rgba(0, 0, 0, 0.05) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        /* Grain texture */
+        .grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
+            pointer-events: none;
+            mix-blend-mode: overlay;
+            z-index: 5;
+        }
+        
+        /* Noise texture */
+        .bg-noise {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3' numOctaves='3' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error(error);
+            // Alert enabled for mobile debugging
+            alert('Debug Error: ' + message + ' at ' + lineno + ':' + colno + '\nSource: ' + source);
+        };
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Safety check for library loading
+        if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+            throw new Error("Critical: React libraries failed to load from CDN. Please check your connection.");
+        }
+
+        const { useState } = React;
+
+        // Icon components replacing lucide-react imports
+        const Calendar = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+        );
+        const Music = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        );
+        const Film = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></svg>
+        );
+        const Share2 = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+        );
+        const Loader2 = ({ className }) => (
+            <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        );
+
+        // Comprehensive database with monthly granularity
+        const SONGS_DATABASE = {
+        "1970-01": { song: "Подмосковные вечера", artist: "Муслим Магомаев" },
+        "1970-02": { song: "Я тебе, конечно, верю", artist: "Муслим Магомаев" },
+        "1970-03": { song: "Лесной олень", artist: "Аида Ведищева" },
+        "1970-04": { song: "Надежда", artist: "Анна Герман" },
+        "1970-05": { song: "Берёзы", artist: "Любовь Зыкина" },
+        "1970-06": { song: "Чёрный кот", artist: "Тамара и Сергей Никитины" },
+        "1970-07": { song: "Там, где клён шумит", artist: "Николай Расторгуев" },
+        "1970-08": { song: "Катюша", artist: "Людмила Зыкина" },
+        "1970-09": { song: "Огней так много золотых", artist: "Анна Герман" },
+        "1970-10": { song: "Надежда", artist: "Анна Герман" },
+        "1970-11": { song: "Ландыши", artist: "Вадим Мулерман" },
+        "1970-12": { song: "Последняя поэма", artist: "Анна Герман" },
+        
+        "1971-01": { song: "Любовь, комсомол и весна", artist: "ВИА Весёлые ребята" },
+        "1971-02": { song: "Алёшка", artist: "ВИА Весёлые ребята" },
+        "1971-03": { song: "Бологое", artist: "ВИА Весёлые ребята" },
+        "1971-04": { song: "Люди встречаются", artist: "ВИА Весёлые ребята" },
+        "1971-05": { song: "Напиши мне письмо", artist: "Эдуард Хиль" },
+        "1971-06": { song: "Если любишь ты", artist: "ВИА Весёлые ребята" },
+        "1971-07": { song: "Мой адрес — Советский Союз", artist: "ВИА Самоцветы" },
+        "1971-08": { song: "Рассвет-чародей", artist: "ВИА Весёлые ребята" },
+        "1971-09": { song: "Мгновения", artist: "Муслим Магомаев" },
+        "1971-10": { song: "Нежность", artist: "Майя Кристалинская" },
+        "1971-11": { song: "Песня о медведях", artist: "Кавказская пленница" },
+        "1971-12": { song: "Где-то далеко", artist: "ВИА Весёлые ребята" },
+
+        "1975-01": { song: "Мираж", artist: "ВИА Самоцветы" },
+        "1975-02": { song: "Мой адрес — Советский Союз", artist: "ВИА Самоцветы" },
+        "1975-03": { song: "Белая черёмуха", artist: "ВИА Самоцветы" },
+        "1975-04": { song: "Берега России", artist: "Людмила Зыкина" },
+        "1975-05": { song: "Всё могут короли", artist: "Олег Анофриев" },
+        "1975-06": { song: "Позвони мне, позвони", artist: "ВИА Самоцветы" },
+        "1975-07": { song: "Я у бабушки живу", artist: "София Ротару" },
+        "1975-08": { song: "Лаванда", artist: "София Ротару" },
+        "1975-09": { song: "На 30 лет моложе", artist: "Алла Пугачёва" },
+        "1975-10": { song: "Арлекино", artist: "Алла Пугачёва" },
+        "1975-11": { song: "Королева красоты", artist: "ВИА Самоцветы" },
+        "1975-12": { song: "На Тихорецкую состав отправится", artist: "Андрей Миронов" },
+
+        "1980-01": { song: "Притяженье земли", artist: "Анна Герман и ВИА Самоцветы" },
+        "1980-02": { song: "Александра", artist: "Алла Пугачёва" },
+        "1980-03": { song: "Московские окна", artist: "София Ротару" },
+        "1980-04": { song: "Лада", artist: "София Ротару" },
+        "1980-05": { song: "Вишнёвый сад", artist: "София Ротару" },
+        "1980-06": { song: "Я не могу иначе", artist: "Алла Пугачёва" },
+        "1980-07": { song: "Звёздное лето", artist: "ВИА Самоцветы" },
+        "1980-08": { song: "Миллион алых роз", artist: "Алла Пугачёва" },
+        "1980-09": { song: "Не отрекаются любя", artist: "Алла Пугачёва" },
+        "1980-10": { song: "Позови меня с собой", artist: "София Ротару" },
+        "1980-11": { song: "Непогода", artist: "София Ротару" },
+        "1980-12": { song: "У природы нет плохой погоды", artist: "Андрей Миронов" },
+
+        "1985-01": { song: "Этот мир", artist: "София Ротару" },
+        "1985-02": { song: "Группа крови", artist: "Кино" },
+        "1985-03": { song: "Перемен", artist: "Кино" },
+        "1985-04": { song: "Звезда по имени Солнце", artist: "Кино" },
+        "1985-05": { song: "Пачка сигарет", artist: "Кино" },
+        "1985-06": { song: "Мы желаем счастья вам", artist: "ВИА Самоцветы" },
+        "1985-07": { song: "Беловежская пуща", artist: "Песняры" },
+        "1985-08": { song: "Вологда", artist: "Песняры" },
+        "1985-09": { song: "Малиновка", artist: "Песняры" },
+        "1985-10": { song: "Московская осень", artist: "София Ротару" },
+        "1985-11": { song: "Луна", artist: "София Ротару" },
+        "1985-12": { song: "Ветер перемен", artist: "Scorpions" },
+
+        "1990-01": { song: "Белый снег", artist: "Игорь Тальков" },
+        "1990-02": { song: "Чистые пруды", artist: "Игорь Тальков" },
+        "1990-03": { song: "Летний дождь", artist: "Алла Пугачёва" },
+        "1990-04": { song: "Пригласите танцевать", artist: "Алла Пугачёва" },
+        "1990-05": { song: "Желтые тюльпаны", artist: "Наташа Королёва" },
+        "1990-06": { song: "Маленькая страна", artist: "Наташа Королёва" },
+        "1990-07": { song: "Странник", artist: "Игорь Тальков" },
+        "1990-08": { song: "Ностальгия", artist: "Игорь Саруханов" },
+        "1990-09": { song: "Скрипка-лиса", artist: "Валерий Леонтьев" },
+        "1990-10": { song: "Дельтаплан", artist: "Валерий Леонтьев" },
+        "1990-11": { song: "Ягода-малина", artist: "Валентина Легкоступова" },
+        "1990-12": { song: "Августин", artist: "Валерий Леонтьев" },
+
+        "1995-01": { song: "Владимирский централ", artist: "Михаил Круг" },
+        "1995-02": { song: "Кольщик", artist: "Михаил Круг" },
+        "1995-03": { song: "Девочка-пай", artist: "Михаил Круг" },
+        "1995-04": { song: "Не плачь", artist: "Татьяна Буланова" },
+        "1995-05": { song: "Тебе моя последняя любовь", artist: "Ирина Круг и Михаил Круг" },
+        "1995-06": { song: "На белом покрывале января", artist: "Сладкий Сон" },
+        "1995-07": { song: "Птица счастья", artist: "Игорь Николаев" },
+        "1995-08": { song: "Выпьем за любовь", artist: "Игорь Николаев" },
+        "1995-09": { song: "Дельфин и русалка", artist: "Игорь Николаев и Наташа Королёва" },
+        "1995-10": { song: "Зайка моя", artist: "Филипп Киркоров" },
+        "1995-11": { song: "Атлантида", artist: "Филипп Киркоров" },
+        "1995-12": { song: "Единственная моя", artist: "Филипп Киркоров" },
+
+        "2000-01": { song: "За четыре моря", artist: "Блестящие" },
+        "2000-02": { song: "Чао, бамбино", artist: "Блестящие" },
+        "2000-03": { song: "Апельсиновая песня", artist: "Блестящие" },
+        "2000-04": { song: "Полковнику никто не пишет", artist: "Би-2" },
+        "2000-05": { song: "Пропадаю я", artist: "Любовь Успенская" },
+        "2000-06": { song: "Метелица", artist: "Валерия" },
+        "2000-07": { song: "Ты грустишь", artist: "Валерия" },
+        "2000-08": { song: "Часики", artist: "Валерия" },
+        "2000-09": { song: "Рига-Москва", artist: "Валерия" },
+        "2000-10": { song: "Электричка", artist: "Алёна Апина" },
+        "2000-11": { song: "Узелок завяжется", artist: "Алёна Апина" },
+        "2000-12": { song: "Лётчик", artist: "Мечтать" },
+
+        "2005-01": { song: "Зимний сон", artist: "Алсу" },
+        "2005-02": { song: "Нас не догонят", artist: "t.A.T.u." },
+        "2005-03": { song: "Я сошла с ума", artist: "t.A.T.u." },
+        "2005-04": { song: "All About Us", artist: "t.A.T.u." },
+        "2005-05": { song: "Russian Roulette", artist: "Rihanna" },
+        "2005-06": { song: "Наташа", artist: "Руки Вверх!" },
+        "2005-07": { song: "Крошка моя", artist: "Руки Вверх!" },
+        "2005-08": { song: "Студент", artist: "Руки Вверх!" },
+        "2005-09": { song: "18 мне уже", artist: "Руки Вверх!" },
+        "2005-10": { song: "На берегу неба", artist: "Дима Билан" },
+        "2005-11": { song: "Ты должна рядом быть", artist: "Дима Билан" },
+        "2005-12": { song: "Я так люблю тебя", artist: "Дима Билан" },
+
+        "2010-01": { song: "Believe", artist: "Дима Билан" },
+        "2010-02": { song: "Never Let You Go", artist: "Дима Билан" },
+        "2010-03": { song: "Невозможная", artist: "Дима Билан" },
+        "2010-04": { song: "Одиночество", artist: "Слава" },
+        "2010-05": { song: "Лондон", artist: "Тимати и Григорий Лепс" },
+        "2010-06": { song: "Знаешь ли ты", artist: "МакSим" },
+        "2010-07": { song: "Мой рай", artist: "МакSим" },
+        "2010-08": { song: "Отпускаю", artist: "МакSим" },
+        "2010-09": { song: "Нежность", artist: "МакSим" },
+        "2010-10": { song: "Мама Люба", artist: "Serebro" },
+        "2010-11": { song: "Я тебя не отдам", artist: "Serebro" },
+        "2010-12": { song: "Мало тебя", artist: "Serebro" },
+
+        "2015-01": { song: "Тамада", artist: "MiyaGi & Эндшпиль" },
+        "2015-02": { song: "I Got Love", artist: "MiyaGi & Эндшпиль" },
+        "2015-03": { song: "Самая самая", artist: "Егор Крид" },
+        "2015-04": { song: "Невеста", artist: "Егор Крид" },
+        "2015-05": { song: "Баклажан", artist: "Тимати feat. Рекорд Оркестр" },
+        "2015-06": { song: "Ты меня не стоишь", artist: "Bahh Tee" },
+        "2015-07": { song: "Всё для тебя", artist: "Стас Михайлов" },
+        "2015-08": { song: "ДНК", artist: "Джиган feat. Артем Качер" },
+        "2015-09": { song: "Моя игра", artist: "Баста" },
+        "2015-10": { song: "Сансара", artist: "Баста" },
+        "2015-11": { song: "Выпускной (Медлячок)", artist: "Баста" },
+        "2015-12": { song: "Цунами", artist: "Нюша" },
+
+        "2020-01": { song: "Незабудка", artist: "Тима Белорусских" },
+        "2020-02": { song: "Мокрые кроссы", artist: "Тима Белорусских" },
+        "2020-03": { song: "Витаминка", artist: "Тима Белорусских" },
+        "2020-04": { song: "Проснулся в темноте", artist: "GONE.Fludd" },
+        "2020-05": { song: "Зацепила", artist: "Артур Пирожков" },
+        "2020-06": { song: "Алкоголичка", artist: "Артур Пирожков" },
+        "2020-07": { song: "Пустите меня на танцпол", artist: "HammAli & Navai" },
+        "2020-08": { song: "Девочка-война", artist: "HammAli & Navai" },
+        "2020-09": { song: "Прятки", artist: "HammAli & Navai" },
+        "2020-10": { song: "Cadillac", artist: "MORGENSHTERN & Элджей" },
+        "2020-11": { song: "Cristal & МОЁТ", artist: "MORGENSHTERN" },
+        "2020-12": { song: "El Problema", artist: "MORGENSHTERN & Тимати" },
+
+        "2024-01": { song: "Комета", artist: "JONY" },
+        "2024-02": { song: "Титры", artist: "JONY" },
+        "2024-03": { song: "Аллея", artist: "JONY" },
+        "2024-04": { song: "Покинула чат", artist: "Клава Кока" },
+        "2024-05": { song: "Царица", artist: "ANNA ASTI" },
+        "2024-06": { song: "По барам", artist: "ANNA ASTI" },
+        "2024-07": { song: "Спектакль окончен", artist: "Полина Гагарина" },
+        "2024-08": { song: "Обезоружена", artist: "Полина Гагарина" },
+        "2024-09": { song: "Кукушка", artist: "Полина Гагарина" },
+        "2024-10": { song: "Никаких больше вечеринок", artist: "Cream Soda" },
+        "2024-11": { song: "Плачу на техно", artist: "Cream Soda & Хлеб" },
+        "2024-12": { song: "Сердце лёд", artist: "Cream Soda" },
+        };
+
+        const MOVIES_DATABASE = {
+        "1970": { title: "Белое солнце пустыни", director: "Владимир Мотыль" },
+        "1971": { title: "Офицеры", director: "Владимир Рогов" },
+        "1972": { title: "Калина красная", director: "Василий Шукшин" },
+        "1973": { title: "Семнадцать мгновений весны", director: "Татьяна Лиознова" },
+        "1974": { title: "Большая перемена", director: "Алексей Коренев" },
+        "1975": { title: "Ирония судьбы", director: "Эльдар Рязанов" },
+        "1976": { title: "Служебный роман", director: "Эльдар Рязанов" },
+        "1977": { title: "Мимино", director: "Георгий Данелия" },
+        "1978": { title: "Ключ без права передачи", director: "Динара Асанова" },
+        "1979": { title: "Сталкер", director: "Андрей Тарковский" },
+        "1980": { title: "Москва слезам не верит", director: "Владимир Меньшов" },
+        "1981": { title: "Экипаж", director: "Александр Митта" },
+        "1982": { title: "Тегеран-43", director: "Александр Алов и Владимир Наумов" },
+        "1983": { title: "Покровские ворота", director: "Михаил Козаков" },
+        "1984": { title: "Гостья из будущего", director: "Павел Арсенов" },
+        "1985": { title: "Самая обаятельная и привлекательная", director: "Геральд Бежанов" },
+        "1986": { title: "Кин-дза-дза!", director: "Георгий Данелия" },
+        "1987": { title: "Холодное лето пятьдесят третьего", director: "Александр Прошкин" },
+        "1988": { title: "Маленькая Вера", director: "Василий Пичул" },
+        "1989": { title: "Интердевочка", director: "Пётр Тодоровский" },
+        "1990": { title: "Такси-блюз", director: "Павел Лунгин" },
+        "1991": { title: "Утомлённые солнцем", director: "Никита Михалков" },
+        "1992": { title: "Брат", director: "Алексей Балабанов" },
+        "1993": { title: "Ширли-мырли", director: "Владимир Меньшов" },
+        "1994": { title: "Особенности национальной охоты", director: "Александр Рогожкин" },
+        "1995": { title: "Кавказский пленник", director: "Сергей Бодров" },
+        "1996": { title: "Вор", director: "Павел Чухрай" },
+        "1997": { title: "Брат 2", director: "Алексей Балабанов" },
+        "1998": { title: "Жмурки", director: "Алексей Балабанов" },
+        "1999": { title: "Особенности национальной рыбалки", director: "Александр Рогожкин" },
+        "2000": { title: "Сёстры", director: "Сергей Бодров мл." },
+        "2001": { title: "Война", director: "Алексей Балабанов" },
+        "2002": { title: "Звезда", director: "Николай Лебедев" },
+        "2003": { title: "Возвращение", director: "Андрей Звягинцев" },
+        "2004": { title: "Ночной дозор", director: "Тимур Бекмамбетов" },
+        "2005": { title: "Дневной дозор", director: "Тимур Бекмамбетов" },
+        "2006": { title: "Ирония судьбы. Продолжение", director: "Тимур Бекмамбетов" },
+        "2007": { title: "Стиляги", director: "Валерий Тодоровский" },
+        "2008": { title: "Адмиралъ", director: "Андрей Кравчук" },
+        "2009": { title: "Мы из будущего", director: "Андрей Малюков" },
+        "2010": { title: "Как я провёл этим летом", director: "Алексей Попогребский" },
+        "2011": { title: "Ёлки", director: "Тимур Бекмамбетов" },
+        "2012": { title: "Кококо", director: "Авдотья Смирнова" },
+        "2013": { title: "Левиафан", director: "Андрей Звягинцев" },
+        "2014": { title: "Движение вверх", director: "Антон Мегердичев" },
+        "2015": { title: "Викинг", director: "Андрей Кравчук" },
+        "2016": { title: "Тренер", director: "Данила Козловский" },
+        "2017": { title: "Холоп", director: "Клим Шипенко" },
+        "2018": { title: "Лёд", director: "Олег Трофим" },
+        "2019": { title: "Т-34", director: "Алексей Сидоров" },
+        "2020": { title: "Вторжение", director: "Фёдор Бондарчук" },
+        "2021": { title: "Чернобыль", director: "Данила Козловский" },
+        "2022": { title: "Сердце Пармы", director: "Антон Мегердичев" },
+        "2023": { title: "Чебурашка", director: "Дмитрий Дьяченко" },
+        "2024": { title: "Мастер и Маргарита", director: "Михаил Локшин" },
+        };
+
+        const ERA_PHRASES = {
+        1970: [
+            "Твои родители танцевали под ВИА — романтика! 🕺💕",
+            "Советская эпоха, дефицита романтики не было 😌🌹",
+            "Брежнев у власти, любовь в воздухе 🎖️💘"
+        ],
+        1980: [
+            "Перестройка в разгаре, страсти нешуточные 🔥",
+            "Олимпиада-80, спортивные достижения во всём 🏅😏",
+            "Видеомагнитофоны, кассеты, вайб 📼✨"
+        ],
+        1990: [
+            "Лихие 90-е — любовь без правил 💘",
+            "Пейджеры, первые дискотеки, энергия 📟🔥",
+            "МММ обещало счастье — родители нашли своё 😌💕"
+        ],
+        2000: [
+            "Нулевые, Nokia 3310, особенный вайб 📱✨",
+            "ICQ, статус 'Занят', но не совсем 😏💬",
+            "Золотая эпоха MTV Russia 🎸🔥"
+        ],
+        2010: [
+            "Инстаграм без рилсов, жизнь была проще 📸🔥",
+            "ВКонтакте на пике — лайки работали 💙✨",
+            "Первые айфоны, новая эра романтики 📱💕"
+        ],
+        2020: [
+            "Пандемия, самоизоляция... ну вы поняли 😏🏠",
+            "Зум-звонки днём, а вечером... 💻🔥",
+            "Карантин — время для семьи 👨‍👩‍👦💘"
+        ]
+        };
+
+        const LOADING_MESSAGES = [
+        "Листаем архивы ЗАГСа... 📋",
+        "Опрашиваем свидетелей... 👀",
+        "Проверяем советские календари... 📆",
+        "Спрашиваем у бабушки... 👵",
+        "Ищем в архивах Госкино... 🎬",
+        "Копаемся в старых кассетах... 📼",
+        "Анализируем данные... 🔍",
+        "Связываемся с 90-ми... 📞"
+        ];
+
+        const KonceptiaFM = () => {
+        const [birthday, setBirthday] = useState('');
+        const [result, setResult] = useState(null);
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState('');
+        const [loadingMessage, setLoadingMessage] = useState('');
+
+        const getMonthKey = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}`;
+        };
+
+        const getSongForDate = (date) => {
+            const monthKey = getMonthKey(date);
+            if (SONGS_DATABASE[monthKey]) {
+            return SONGS_DATABASE[monthKey];
+            }
+            
+            // Fallback to nearest available
+            const year = date.getFullYear();
+            const nearestYears = [1970, 1975, 1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015, 2020, 2024];
+            const closestYear = nearestYears.reduce((prev, curr) => 
+            Math.abs(curr - year) < Math.abs(prev - year) ? curr : prev
+            );
+            return SONGS_DATABASE[`${closestYear}-01`] || { song: "Неизвестная песня", artist: "Легендарный артист" };
+        };
+
+        const getMovieForYear = (year) => {
+            return MOVIES_DATABASE[year] || { title: "Классика советского кино", director: "Великий режиссёр" };
+        };
+
+        const getEraPhrase = (year) => {
+            const decade = Math.floor(year / 10) * 10;
+            const phrases = ERA_PHRASES[decade] || ERA_PHRASES[2020];
+            return phrases[Math.floor(Math.random() * phrases.length)];
+        };
+
+        const getBirthdayEasterEgg = (date) => {
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const dayOfWeek = date.getDay();
+
+            if (month === 2 && day === 14) return "Валентинов день — классика! 💘 Твои родители явно романтики";
+            if (month === 1 && day === 1) return "Новогодняя ночь — вот это праздник! 🎆🍾";
+            if (month === 12 && day === 31) return "Старый Новый год работает! 🎄✨";
+            if (month === 5 && day === 9) return "День Победы! Патриотичное зачатие 🎖️🇷🇺";
+            if (month === 3 && day === 8) return "8 марта — цветы, шампанское, романтика 🌹🥂";
+            if (month === 11 && day === 4) return "День народного единства — буквально! 😏🇷🇺";
+            if (month === 9 && day === 1) return "1 сентября — школа началась, а у родителей... 📚😏";
+            if (dayOfWeek === 0 || dayOfWeek === 6) return "Выходной день — самое то для романтики 😌💕";
+            
+            return null;
+        };
+
+        const getConceptionEasterEgg = (date) => {
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const dayOfWeek = date.getDay();
+
+            if (month === 12 && day === 31) return "Зачат в новогоднюю ночь! Шампанское сработало 🍾✨";
+            if (month === 2 && day === 14) return "Зачат 14 февраля — родители не теряли времени 💘🔥";
+            if (dayOfWeek === 5) return "Пятница вечером — логично 🍷😏";
+            if (month >= 6 && month <= 8) return "Летняя ночь, романтика... 🌙💫";
+            if (month === 12 || month === 1 || month === 2) return "Холодные ночи — приходится греться 🔥❄️";
+            
+            return null;
+        };
+
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            console.log("Form submitted with date:", birthday);
+            
+            try {
+                setError('');
+                setResult(null);
+
+                if (!birthday) {
+                    setError("Ну давай, не стесняйся! Введи дату рождения 😊");
+                    return;
+                }
+
+                const birthDate = new Date(birthday);
+                if (isNaN(birthDate.getTime())) {
+                    setError("Кажется, дата некорректная. Попробуй еще раз! 📅");
+                    return;
+                }
+
+                // Normalize today to end of day to avoid timezone issues with "future" check
+                const today = new Date();
+                today.setHours(23, 59, 59, 999);
+                
+                if (birthDate > today) {
+                    setError("Эй, ты из будущего? 🤖 Давай реальную дату!");
+                    return;
+                }
+
+                if (birthDate.getFullYear() < 1970) {
+                    setError("Так далеко наши архивы не достают 📜 Попробуй помоложе!");
+                    return;
+                }
+
+                // Check mostly for sane year, but allow 2024/2025
+                if (birthDate.getFullYear() > today.getFullYear() + 1) {
+                    setError("Совсем свежий! 👶 Но давай подождём хотя бы рождения");
+                    return;
+                }
+
+                setLoading(true);
+                setLoadingMessage(LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]);
+
+                // Use a small timeout to allow UI to update to loading state before heavy calculation (though calc is fast here)
+                // The 3000ms is for effect.
+                setTimeout(() => {
+                    try {
+                        const daysBack = 262 + Math.floor(Math.random() * 9);
+                        const conceptionDate = new Date(birthDate);
+                        conceptionDate.setDate(conceptionDate.getDate() - daysBack);
+
+                        const song = getSongForDate(conceptionDate);
+                        const movie = getMovieForYear(conceptionDate.getFullYear());
+                        const eraPhrase = getEraPhrase(conceptionDate.getFullYear());
+                        const birthdayEgg = getBirthdayEasterEgg(birthDate);
+                        const conceptionEgg = getConceptionEasterEgg(conceptionDate);
+
+                        const easterEggs = [birthdayEgg, conceptionEgg].filter(Boolean);
+                        const selectedEasterEgg = easterEggs.length > 0 
+                            ? easterEggs[Math.floor(Math.random() * easterEggs.length)]
+                            : null;
+
+                        const decade = Math.floor(conceptionDate.getFullYear() / 10) * 10;
+                        
+                        setResult({
+                            conceptionDate,
+                            song,
+                            movie,
+                            eraPhrase,
+                            easterEgg: selectedEasterEgg,
+                            decade
+                        });
+                        setLoading(false);
+                    } catch (innerErr) {
+                        console.error("Error in calculation:", innerErr);
+                        setError("Ошибка при расчёте данных. Попробуйте другую дату.");
+                        setLoading(false);
+                    }
+                }, 3000);
+            } catch (err) {
+                console.error("Error in handleSubmit:", err);
+                setError("Произошла ошибка. Попробуйте еще раз.");
+            }
+        };
+
+        const handleShare = () => {
+            if (!result) return;
+            
+            const text = `Я был зачат под "${result.song.song}" от ${result.song.artist} и "${result.movie.title}" 🔥\nА ты? koncepcia.fm`;
+            
+            navigator.clipboard.writeText(text);
+            alert('Скопировано! 📋');
+        };
+
+        const formatDate = (date) => {
+            const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
+                            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+            return `~${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+        };
+
+        const getBackgroundClass = (decade) => {
+            const classes = {
+            1970: 'bg-gradient-to-br from-orange-600 via-amber-700 to-yellow-800',
+            1980: 'bg-gradient-to-br from-purple-600 via-pink-600 to-fuchsia-700',
+            1990: 'bg-gradient-to-br from-teal-600 via-cyan-700 to-blue-800',
+            2000: 'bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700',
+            2010: 'bg-gradient-to-br from-pink-500 via-rose-500 to-red-600',
+            2020: 'bg-gradient-to-br from-slate-700 via-gray-800 to-zinc-900'
+            };
+            return classes[decade] || classes[2020];
+        };
+
+        return (
+            <div className={`min-h-screen ${result ? getBackgroundClass(result.decade) : 'bg-gradient-to-br from-purple-600 via-pink-600 to-red-600'} transition-all duration-1000 p-4 flex items-center justify-center relative overflow-hidden`}>
+            {/* Texture overlays */}
+            <div className="absolute inset-0 opacity-20 bg-noise"></div>
+            <div className="absolute inset-0 scanlines"></div>
+            {result && result.decade <= 1990 && (
+                <div className="absolute inset-0 grain"></div>
+            )}
+            
+            <div className="w-full max-w-md relative z-10">
+                {!result ? (
+                <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8">
+                    <div className="text-center mb-8">
+                    <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+                        КОНЦЕПЦИЯ.FM 🔥
+                    </h1>
+                    <p className="text-gray-600 text-lg">
+                        Узнай, под какую песню и фильм тебя зачали
+                    </p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <Calendar className="inline w-4 h-4 mr-1" />
+                        Твоя дата рождения
+                        </label>
+                        <input
+                        type="date"
+                        value={birthday}
+                        onChange={(e) => setBirthday(e.target.value)}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-pink-500 focus:outline-none transition-colors text-lg"
+                        />
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-100 border-2 border-red-300 text-red-700 px-4 py-3 rounded-xl text-center">
+                        {error}
+                        </div>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-4 px-6 rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg"
+                    >
+                        {loading ? (
+                        <span className="flex items-center justify-center">
+                            <Loader2 className="animate-spin mr-2" />
+                            {loadingMessage}
+                        </span>
+                        ) : (
+                        "УЗНАТЬ ПРАВДУ 😏"
+                        )}
+                    </button>
+                    </form>
+                </div>
+                ) : (
+                <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 space-y-6 animate-fade-in">
+                    <div className="text-center border-b-2 border-gray-200 pb-6">
+                    <div className="text-3xl mb-2">📅</div>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {formatDate(result.conceptionDate)}
+                    </h2>
+                    <p className="text-lg text-gray-600 italic">
+                        {result.eraPhrase}
+                    </p>
+                    {result.easterEgg && (
+                        <p className="text-md text-purple-600 mt-2 font-medium">
+                        {result.easterEgg}
+                        </p>
+                    )}
+                    </div>
+
+                    <div className="space-y-4">
+                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-5 rounded-2xl">
+                        <div className="flex items-start gap-3">
+                        <Music className="w-6 h-6 text-purple-600 mt-1 flex-shrink-0" />
+                        <div className="flex-1">
+                            <h3 className="font-bold text-gray-800 mb-1">🎵 Хит недели:</h3>
+                            <p className="text-gray-700 font-medium">"{result.song.song}"</p>
+                            <p className="text-gray-600 text-sm">{result.song.artist}</p>
+                            <a
+                            href={`https://music.yandex.ru/search?text=${encodeURIComponent(result.song.artist + ' ' + result.song.song)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-3 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                            >
+                            🎧 Слушать на Яндекс.Музыке
+                            </a>
+                        </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-5 rounded-2xl">
+                        <div className="flex items-start gap-3">
+                        <Film className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
+                        <div className="flex-1">
+                            <h3 className="font-bold text-gray-800 mb-1">🎬 Фильм года:</h3>
+                            <p className="text-gray-700 font-medium">"{result.movie.title}"</p>
+                            <p className="text-gray-600 text-sm">{result.movie.director}</p>
+                            <div className="flex gap-2 mt-3">
+                            <a
+                                href={`https://rutube.ru/search/?query=${encodeURIComponent(result.movie.title)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                            >
+                                📺 Rutube
+                            </a>
+                            <a
+                                href={`https://vk.com/video?q=${encodeURIComponent(result.movie.title)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                            >
+                                📺 VK Видео
+                            </a>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                    <button
+                        onClick={handleShare}
+                        className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-3 px-4 rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                    >
+                        <Share2 className="w-5 h-5" />
+                        Поделиться
+                    </button>
+                    <button
+                        onClick={() => {
+                        setResult(null);
+                        setBirthday('');
+                        }}
+                        className="bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-xl hover:bg-gray-300 transition-all"
+                    >
+                        Ещё раз
+                    </button>
+                    </div>
+                </div>
+                )}
+            </div>
+
+
+            </div>
+        );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<KonceptiaFM />);
+    </script>
+</body>
+</html>
